@@ -9,6 +9,23 @@ Este projeto é um pequeno jogo desenvolvido em Go que roda no terminal usando a
 - Pressione **E** para interagir com o ambiente.
 - Pressione **ESC** para sair do jogo.
 
+### Alterações feitas
+Arquitetura concorrente adicionada ao projeto base do professor:
+
+main.go — o loop principal foi substituído por goroutines comunicando via channels. O main agora cria os channels, lança as goroutines e aguarda o encerramento gracioso com sync.WaitGroup.
+jogo.go — adicionadas structs (EstadoInimigo, MoveInimigo, EstadoRender) e funções para suportar concorrência: jogoSnapshot (cópia imutável do estado), jogoAplicarMoveInimigo (processa movimentos dos inimigos), jogoBFSNextStep (pathfinding por busca em largura), jogoColetarMoeda e jogoVerificarColisaoInimigos. Adicionados campos de HP, moedas e vida extra.
+interface.go — adicionada interfaceDesenharEstado que renderiza a partir de um snapshot imutável em vez do estado direto do jogo, evitando race condition com o gameLoop.
+
+-> goroutines.go — arquivo novo com 7 goroutines:
+
+    inputLoop — lê teclado e envia eventos via channel
+    gameLoop — lógica central com select multiplexando input, inimigos e tempo
+    renderLoop — desenha snapshots recebidos via channel
+    inimigoLoop × 3 — cada inimigo com uma com BFS independente perseguindo o jogador
+    moedaLoop — monitora a condição de vitória (5 moedas coletadas)
+
+personagem.go — personagemMover protegido com mutex para evitar data race com os inimigoLoops. personagemInteragir implementado para coletar vida extra (♥).
+
 ### Controles
 
 | Tecla | Ação              |

@@ -16,17 +16,33 @@ func personagemMover(tecla rune, jogo *Jogo) {
 	nx, ny := jogo.PosX+dx, jogo.PosY+dy
 	// Verifica se o movimento é permitido e realiza a movimentação
 	if jogoPodeMoverPara(jogo, nx, ny) {
+		jogo.Mu.Lock()  
 		jogoMoverElemento(jogo, jogo.PosX, jogo.PosY, dx, dy)
 		jogo.PosX, jogo.PosY = nx, ny
+		jogo.Mu.Unlock()    
 	}
 }
 
 // Define o que ocorre quando o jogador pressiona a tecla de interação
 // Neste exemplo, apenas exibe uma mensagem de status
 // Você pode expandir essa função para incluir lógica de interação com objetos
+// UTILIZADO PARA PEGAR VIDA EXTRA
 func personagemInteragir(jogo *Jogo) {
-	// Atualmente apenas exibe uma mensagem de status
-	jogo.StatusMsg = fmt.Sprintf("Interagindo em (%d, %d)", jogo.PosX, jogo.PosY)
+	if jogo.VidaExtraDisponivel &&
+		jogo.UltimoVisitado.simbolo == VidaExtra.simbolo {
+
+		jogo.UltimoVisitado = Vazio
+		jogo.VidaExtraDisponivel = false
+
+		if jogo.HP < jogo.MaxHP {
+			jogo.HP++
+			jogo.StatusMsg = fmt.Sprintf("Vida extra coletada! HP: %d/%d", jogo.HP, jogo.MaxHP)
+		} else {
+			jogo.StatusMsg = "HP ja esta cheio!"
+		}
+	} else {
+		jogo.StatusMsg = fmt.Sprintf("Interagindo em (%d, %d)", jogo.PosX, jogo.PosY)
+	}
 }
 
 // Processa o evento do teclado e executa a ação correspondente

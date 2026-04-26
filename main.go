@@ -1,7 +1,10 @@
-// main.go - Loop principal do jogo
+// main.go - Loop principal e ponto de entrada
 package main
 
-import "os"
+import (
+	"os"
+	"sync"
+)
 
 func main() {
 	// Inicializa a interface (termbox)
@@ -20,15 +23,37 @@ func main() {
 		panic(err)
 	}
 
-	// Desenha o estado inicial do jogo
-	interfaceDesenharJogo(&jogo)
+	// channels de comunicação entre as goroutines
+	inputCh   := make(chan EventoTeclado, 1)  // input -> gameLoop
+	renderCh  := make(chan EstadoRender, 1)   // gameLoop -> renderLoop
+	inimigoCh := make(chan MoveInimigo, 10)   // inimigoLoop(s) -> gameLoop
+	moedaCh   := make(chan struct{}, 1)		  // moedaLoop -> gameLoop (sinal de vitória)
+	fimCh     := make(chan struct{})          // fechado pelo gameLoop morrer/vencer
+	doneCh    := make(chan struct{})          // sinal de shutdown (fechado para broadcast)
 
-	// Loop principal de entrada
-	for {
-		evento := interfaceLerEventoTeclado()
-		if continuar := personagemExecutarAcao(evento, &jogo); !continuar {
-			break
-		}
-		interfaceDesenharJogo(&jogo)
+	var wg sync.WaitGroup
+
+	//goroutine de input
+	wg.Add(1)
+	go inputLoop(inputCh, doneCh, &wg)
+
+	// goroutine de render
+	wg.Add(1)
+	go renderLoop(renderCh, doneCh, &wg)
+
+	//goroutine autônoma por inimigo encontrado no mapa
+	for i := range jogo.Inimigos {
+		wg.Add(1)
+		go inimigoLoop(i, &jogo, inimigoCh, fimCh, doneCh, &wg)
 	}
+
+	// moedaLoop — condição para vitória (todas as moedas precisam ser coletadas)
+	wg.Add(1)
+	go moedaLoop(&jogo, moedaCh, doneCh, &wg)
+ 
+	gameLoop(&jogo, inputCh, renderCh, inimigoCh, moedaCh, fimCh, doneCh)
+ 
+	// Shutdown sinaliza todas as goroutines e aguarda conclusão
+	close(doneCh)
+	wg.Wait()
 }
