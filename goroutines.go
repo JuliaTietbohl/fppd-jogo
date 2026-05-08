@@ -37,6 +37,8 @@ func gameLoop(
 	renderCh chan<- EstadoRender,
 	inimigoCh <-chan MoveInimigo,
 	moedaCh <-chan struct{},
+	spawnMoedaCh <-chan int,
+	piscarCh <-chan bool,
 	fimCh chan struct{},
 	doneCh <-chan struct{},
 ) {
@@ -63,6 +65,7 @@ func gameLoop(
 				jogo.Mu.Lock()
 				if jogo.HP <= 0 {
 					jogo.StatusMsg = "Você morreu! Pressione ESC para sair."
+					jogo.Morto = true
 					fechouFim.Do(func() { close(fimCh) })
 				} else {
 					jogo.StatusMsg = fmt.Sprintf("Você foi atingido! HP: %s (%d/%d)",
@@ -86,12 +89,16 @@ func gameLoop(
 			case "sair":
 				return
 			case "mover":
+				if jogo.Morto {
+					break
+				}
     			personagemMover(ev.Tecla, jogo)
 				jogoColetarMoeda(jogo)
 				if jogoVerificarColisaoInimigos(jogo) {
 					jogo.Mu.Lock()
 					if jogo.HP <= 0 {
 						jogo.StatusMsg = "Você morreu! Pressione ESC para sair."
+						jogo.Morto = true
 						fechouFim.Do(func() { close(fimCh) })
 					} else {
 						jogo.StatusMsg = fmt.Sprintf("Você foi atingido! HP: %s (%d/%d)",
@@ -110,6 +117,17 @@ func gameLoop(
 			jogo.MoedaAtual = idx
 			jogo.Mu.Unlock()
 			jogoSpawnarMoeda(jogo)
+			enviarSnapshot(jogo, renderCh)
+
+		// Case 7: piscarLoop alternando visibilidade da vida extra
+		case visivel := <-piscarCh:
+			jogo.Mu.Lock()
+			if visivel {
+				jogo.Mapa[jogo.VidaExtraPos.y][jogo.VidaExtraPos.x] = VidaExtra
+			} else {
+				jogo.Mapa[jogo.VidaExtraPos.y][jogo.VidaExtraPos.x] = Vazio
+			}
+			jogo.Mu.Unlock()
 			enviarSnapshot(jogo, renderCh)
 		}
 	}
@@ -237,6 +255,34 @@ func moedaLoop(jogo *Jogo, moedaCh chan<- struct{}, spawnMoedaCh chan<- int, don
                 case <-doneCh:
                     return
                 }
+            }
+        }
+    }
+}
+
+// --- Goroutine 8: piscarLoop ---
+func piscarLoop(jogo *Jogo, piscarCh chan<- bool, doneCh <-chan struct{}, fimCh <-chan struct{}, wg *sync.WaitGroup) {
+    defer wg.Done()
+    ticker := time.NewTicker(500 * time.Millisecond)
+    defer ticker.Stop()
+    visivel := true
+    for {
+        select {
+        case <-doneCh:
+            return
+        case <-fimCh:
+            return
+        case <-ticker.C:
+            jogo.Mu.RLock()
+            disponivel := jogo.VidaExtraDisponivel
+            jogo.Mu.RUnlock()
+            if !disponivel {
+                return
+            }
+            visivel = !visivel
+            select {
+            case piscarCh <- visivel:
+            default:
             }
         }
     }

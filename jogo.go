@@ -31,6 +31,11 @@ type Jogo struct {
 	VidaExtraDisponivel bool     // true enquanto o item ainda está no mapa (só pode pegar 1 vez)
 	PosicoesMoedas []ponto       // todas as posições de moedas do mapa
 	MoedaAtual     int           // indice de moeda atual (0 a 4)
+	VidaExtraPos struct {
+		x, y    int
+		visivel bool
+	}
+	Morto bool                    // true quando HP chega a 0
 }
 
 type EstadoInimigo struct {
@@ -81,13 +86,14 @@ func jogoCarregarMapa(nome string, jogo *Jogo) error {
 		return err
 	}
 	defer arq.Close()
- 
+
 	scanner := bufio.NewScanner(arq)
 	y := 0
 	for scanner.Scan() {
 		linha := scanner.Text()
 		var linhaElems []Elemento
-		for x, ch := range linha {
+		x := 0  // ← contador de caracteres, não bytes
+		for _, ch := range linha {
 			e := Vazio
 			switch ch {
 			case Parede.simbolo:
@@ -98,23 +104,24 @@ func jogoCarregarMapa(nome string, jogo *Jogo) error {
 			case Vegetacao.simbolo:
 				e = Vegetacao
 			case VidaExtra.simbolo:
-    			e = VidaExtra
+				jogo.VidaExtraPos.x = x
+				jogo.VidaExtraPos.y = y
+				jogo.VidaExtraPos.visivel = true
+				e = VidaExtra
 			case Moeda.simbolo:
 				jogo.PosicoesMoedas = append(jogo.PosicoesMoedas, ponto{x, y})
 				jogo.TotalMoedas++
 				e = Vazio
 			case Personagem.simbolo:
-				jogo.PosX, jogo.PosY = x, y // registra a posição inicial do personagem
+				jogo.PosX, jogo.PosY = x, y
 			}
 			linhaElems = append(linhaElems, e)
+			x++  // ← incrementa por caractere
 		}
 		jogo.Mapa = append(jogo.Mapa, linhaElems)
 		y++
 	}
-	if err := scanner.Err(); err != nil {
-		return err
-	}
-	return nil
+	return scanner.Err()
 }
 
 // Verifica se o personagem pode se mover para a posição (x, y)
@@ -153,7 +160,9 @@ func jogoMoverElemento(jogo *Jogo, x, y, dx, dy int) {
 func jogoSpawnarMoeda(jogo *Jogo) {
     if jogo.MoedaAtual < len(jogo.PosicoesMoedas) {
         p := jogo.PosicoesMoedas[jogo.MoedaAtual]
+		jogo.Mu.Lock()    
         jogo.Mapa[p.y][p.x] = Moeda
+		jogo.Mu.Unlock()
     }
 }
 

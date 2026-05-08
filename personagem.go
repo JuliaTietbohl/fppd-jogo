@@ -30,9 +30,11 @@ func personagemMover(tecla rune, jogo *Jogo) {
 func personagemInteragir(jogo *Jogo) {
 	if jogo.VidaExtraDisponivel &&
 		jogo.UltimoVisitado.simbolo == VidaExtra.simbolo {
-
+		
+		jogo.Mu.Lock() 
 		jogo.UltimoVisitado = Vazio
 		jogo.VidaExtraDisponivel = false
+		jogo.Mu.Unlock()
 
 		if jogo.HP < jogo.MaxHP {
 			jogo.HP++

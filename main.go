@@ -34,6 +34,7 @@ func main() {
 	fimCh        := make(chan struct{})           // fechado pelo gameLoop morrer/vencer
 	doneCh       := make(chan struct{})           // sinal de shutdown (fechado para broadcast)
 	spawnMoedaCh := make(chan int, 1)             // moedaLoop -> gameLoop (spawna próxima moeda)
+	piscarCh     := make(chan bool, 1)            // piscar coração
 	var wg sync.WaitGroup
 
 	//goroutine de input
@@ -54,8 +55,11 @@ func main() {
 	wg.Add(1)
 	go moedaLoop(&jogo, moedaCh, spawnMoedaCh, doneCh, &wg)
 
-	gameLoop(&jogo, inputCh, renderCh, inimigoCh, moedaCh, spawnMoedaCh, fimCh, doneCh)
- 
+	wg.Add(1)
+	go piscarLoop(&jogo, piscarCh, doneCh, fimCh, &wg)
+
+	gameLoop(&jogo, inputCh, renderCh, inimigoCh, moedaCh, spawnMoedaCh, piscarCh, fimCh, doneCh)
+
 	// Shutdown sinaliza todas as goroutines e aguarda conclusão
 	close(doneCh)
 	wg.Wait()
