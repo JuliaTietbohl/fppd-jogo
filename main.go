@@ -23,14 +23,17 @@ func main() {
 		panic(err)
 	}
 
-	// channels de comunicação entre as goroutines
-	inputCh   := make(chan EventoTeclado, 1)  // input -> gameLoop
-	renderCh  := make(chan EstadoRender, 1)   // gameLoop -> renderLoop
-	inimigoCh := make(chan MoveInimigo, 10)   // inimigoLoop(s) -> gameLoop
-	moedaCh   := make(chan struct{}, 1)		  // moedaLoop -> gameLoop (sinal de vitória)
-	fimCh     := make(chan struct{})          // fechado pelo gameLoop morrer/vencer
-	doneCh    := make(chan struct{})          // sinal de shutdown (fechado para broadcast)
+	// Spawna a primeira moeda no mapa
+	jogoSpawnarMoeda(&jogo)
 
+	// channels de comunicação entre as goroutines
+	inputCh      := make(chan EventoTeclado, 1)   // input -> gameLoop
+	renderCh     := make(chan EstadoRender, 1)    // gameLoop -> renderLoop
+	inimigoCh    := make(chan MoveInimigo, 10)    // inimigoLoop(s) -> gameLoop
+	moedaCh      := make(chan struct{}, 1)		  // moedaLoop -> gameLoop (sinal de vitória)
+	fimCh        := make(chan struct{})           // fechado pelo gameLoop morrer/vencer
+	doneCh       := make(chan struct{})           // sinal de shutdown (fechado para broadcast)
+	spawnMoedaCh := make(chan int, 1)             // moedaLoop -> gameLoop (spawna próxima moeda)
 	var wg sync.WaitGroup
 
 	//goroutine de input
@@ -47,11 +50,11 @@ func main() {
 		go inimigoLoop(i, &jogo, inimigoCh, fimCh, doneCh, &wg)
 	}
 
-	// moedaLoop — condição para vitória (todas as moedas precisam ser coletadas)
+	// moedaLoop — monitora coleta e spawna próximas moedas
 	wg.Add(1)
-	go moedaLoop(&jogo, moedaCh, doneCh, &wg)
- 
-	gameLoop(&jogo, inputCh, renderCh, inimigoCh, moedaCh, fimCh, doneCh)
+	go moedaLoop(&jogo, moedaCh, spawnMoedaCh, doneCh, &wg)
+
+	gameLoop(&jogo, inputCh, renderCh, inimigoCh, moedaCh, spawnMoedaCh, fimCh, doneCh)
  
 	// Shutdown sinaliza todas as goroutines e aguarda conclusão
 	close(doneCh)

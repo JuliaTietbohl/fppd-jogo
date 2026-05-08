@@ -29,6 +29,8 @@ type Jogo struct {
 	MoedasColetadas int			 // Objetivo: coletar moedas
 	TotalMoedas     int			 // Contador moedas
 	VidaExtraDisponivel bool     // true enquanto o item ainda está no mapa (só pode pegar 1 vez)
+	PosicoesMoedas []ponto       // todas as posições de moedas do mapa
+	MoedaAtual     int           // indice de moeda atual (0 a 4)
 }
 
 type EstadoInimigo struct {
@@ -98,8 +100,9 @@ func jogoCarregarMapa(nome string, jogo *Jogo) error {
 			case VidaExtra.simbolo:
     			e = VidaExtra
 			case Moeda.simbolo:
-    			jogo.TotalMoedas++
-   	 			e = Moeda
+				jogo.PosicoesMoedas = append(jogo.PosicoesMoedas, ponto{x, y})
+				jogo.TotalMoedas++
+				e = Vazio
 			case Personagem.simbolo:
 				jogo.PosX, jogo.PosY = x, y // registra a posição inicial do personagem
 			}
@@ -145,6 +148,13 @@ func jogoMoverElemento(jogo *Jogo, x, y, dx, dy int) {
 	jogo.Mapa[y][x] = jogo.UltimoVisitado     // restaura o conteúdo anterior
 	jogo.UltimoVisitado = jogo.Mapa[ny][nx]   // guarda o conteúdo atual da nova posição
 	jogo.Mapa[ny][nx] = elemento              // move o elemento
+}
+
+func jogoSpawnarMoeda(jogo *Jogo) {
+    if jogo.MoedaAtual < len(jogo.PosicoesMoedas) {
+        p := jogo.PosicoesMoedas[jogo.MoedaAtual]
+        jogo.Mapa[p.y][p.x] = Moeda
+    }
 }
 
 func jogoAplicarMoveInimigo(jogo *Jogo, mv MoveInimigo) bool {

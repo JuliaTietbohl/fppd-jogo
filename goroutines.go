@@ -103,6 +103,14 @@ func gameLoop(
 				personagemInteragir(jogo)
 			}
 			enviarSnapshot(jogo, renderCh)
+
+		// Case 6: spawnar próxima moeda
+		case idx := <-spawnMoedaCh:
+			jogo.Mu.Lock()
+			jogo.MoedaAtual = idx
+			jogo.Mu.Unlock()
+			jogoSpawnarMoeda(jogo)
+			enviarSnapshot(jogo, renderCh)
 		}
 	}
 }
@@ -197,30 +205,39 @@ func barraHP(hp, maxHP int) string {
 }
 
 // --- Goroutine 7
-func moedaLoop(jogo *Jogo, moedaCh chan<- struct{}, doneCh <-chan struct{}, wg *sync.WaitGroup) {
-	defer wg.Done()
- 
-	ticker := time.NewTicker(100 * time.Millisecond)
-	defer ticker.Stop()
- 
-	for {
-		select {
-		case <-doneCh:
-			return
-		case <-ticker.C:
-			jogo.Mu.RLock()
-			coletadas := jogo.MoedasColetadas
-			total := jogo.TotalMoedas
-			jogo.Mu.RUnlock()
- 
-			// Para vitória: todas as moedas coletadas
-			if total > 0 && coletadas >= total {
-				select {
-				case moedaCh <- struct{}{}:
-				case <-doneCh:
-				}
-				return
-			}
-		}
-	}
+func moedaLoop(jogo *Jogo, moedaCh chan<- struct{}, spawnMoedaCh chan<- int, doneCh <-chan struct{}, wg *sync.WaitGroup) {
+    defer wg.Done()
+    ticker := time.NewTicker(100 * time.Millisecond)
+    defer ticker.Stop()
+
+    ultimoColetado := 0
+
+    for {
+        select {
+        case <-doneCh:
+            return
+        case <-ticker.C:
+            jogo.Mu.RLock()
+            coletadas := jogo.MoedasColetadas
+            total := jogo.TotalMoedas
+            jogo.Mu.RUnlock()
+
+            if coletadas > ultimoColetado {
+                ultimoColetado = coletadas
+                if coletadas >= total {
+                    select {
+                    case moedaCh <- struct{}{}:
+                    case <-doneCh:
+                    }
+                    return
+                }
+                // Spawna a próxima moeda
+                select {
+                case spawnMoedaCh <- coletadas: 
+                case <-doneCh:
+                    return
+                }
+            }
+        }
+    }
 }
